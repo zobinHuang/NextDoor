@@ -2192,6 +2192,9 @@ template<class SampleType, typename App>
 bool doTransitParallelSampling(CSR* csr, NextDoorData<SampleType, App>& nextDoorData, bool enableLoadBalancing)
 {
   //Size of each sample output
+  // 计算每一个 Samples 单步采样的最大规模，分为两种情况：
+  // (1) 如果是 Collective Sampling，则最大规模为采样各步中最大的单步采样 Size
+  // (2) 如果是 Individual Sampling，则最大采样规模出现在最后一步，规模需要累乘计算出来
   size_t maxNeighborsToSample = (App().samplingType() == CollectiveNeighborhood) ? 1 : App().initialSampleSize(csr);
   for (int step = 0; step < App().steps() - 1; step++) {
     if (App().samplingType() == CollectiveNeighborhood) {
@@ -2200,6 +2203,8 @@ bool doTransitParallelSampling(CSR* csr, NextDoorData<SampleType, App>& nextDoor
       maxNeighborsToSample *= App().stepSize(step);
     }
   }
+
+  // 这个列表里分别是全图 CSR 在各个 GPU 上的副本
   std::vector<GPUCSRPartition>& gpuCSRPartitions = nextDoorData.gpuCSRPartitions;
 
   const size_t numDevices = nextDoorData.devices.size();
@@ -3259,6 +3264,8 @@ bool nextdoor(const char* graph_file, const char* graph_type, const char* graph_
 
   nextDoorData.csr = csr;
   allocNextDoorDataOnGPU<SampleType, App>(csr, nextDoorData);
+
+  // 这里每个 GPU 上拷贝了一份全图 CSR 的副本
   std::vector<GPUCSRPartition> gpuCSRPartitions = transferCSRToGPUs(nextDoorData, csr);
   nextDoorData.gpuCSRPartitions = gpuCSRPartitions;
 
